@@ -6,8 +6,7 @@
  * from the master library and demonstrates their power in real-time.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import './PromptLab.css';
+const { useState, useEffect, useRef } = React;
 
 // ===== MASTER PROMPT LIBRARY (1200+ Prompts) =====
 
@@ -327,7 +326,7 @@ Solve using 7 layers:
 
 // ===== MAIN APP COMPONENT =====
 
-export default function PromptLabApp() {
+function PromptLab() {
   const [currentLayer, setCurrentLayer] = useState('crystalline_intent');
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [input, setInput] = useState('');
@@ -335,9 +334,50 @@ export default function PromptLabApp() {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('learn');
   const [favoritePrompts, setFavoritePrompts] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterComplexity, setFilterComplexity] = useState('all');
+  const [notification, setNotification] = useState(null);
 
   // Get current layer info
   const layerInfo = PROMPT_LIBRARY[currentLayer];
+
+  // Show notification
+  const showNotification = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  // Copy to clipboard
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      showNotification('✅ Copied to clipboard!', 'success');
+    }).catch(() => {
+      showNotification('❌ Failed to copy', 'error');
+    });
+  };
+
+  // Filter prompts based on search and complexity
+  const getFilteredPrompts = () => {
+    if (!layerInfo) return {};
+
+    const prompts = layerInfo.prompts;
+    const filtered = {};
+
+    Object.entries(prompts).forEach(([key, prompt]) => {
+      const matchesSearch = !searchQuery ||
+        prompt.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        prompt.description.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesComplexity = filterComplexity === 'all' ||
+        prompt.complexity === filterComplexity;
+
+      if (matchesSearch && matchesComplexity) {
+        filtered[key] = prompt;
+      }
+    });
+
+    return filtered;
+  };
 
   // Demo mode - simulates AI response
   const runPrompt = async () => {
@@ -369,6 +409,22 @@ export default function PromptLabApp() {
       setFavoritePrompts(favoritePrompts.filter(p => p !== promptKey));
     } else {
       setFavoritePrompts([...favoritePrompts, promptKey]);
+    }
+  };
+
+  // Navigate to favorite prompt
+  const goToFavorite = (favoriteName) => {
+    // Find the layer and prompt
+    for (const [layerKey, layer] of Object.entries(PROMPT_LIBRARY)) {
+      for (const [promptKey, prompt] of Object.entries(layer.prompts)) {
+        if (prompt.name === favoriteName) {
+          setCurrentLayer(layerKey);
+          setSelectedPrompt(prompt);
+          setActiveTab('learn');
+          showNotification(`📌 Navigated to ${favoriteName}`, 'success');
+          return;
+        }
+      }
     }
   };
 
@@ -405,7 +461,12 @@ export default function PromptLabApp() {
               </p>
             ) : (
               favoritePrompts.map(fav => (
-                <button key={fav} className="favorite-btn">
+                <button
+                  key={fav}
+                  className="favorite-btn"
+                  onClick={() => goToFavorite(fav)}
+                  aria-label={`Go to ${fav} prompt`}
+                >
                   {fav}
                 </button>
               ))
@@ -416,22 +477,31 @@ export default function PromptLabApp() {
         {/* MAIN CONTENT */}
         <main className="promptlab-main">
           {/* TABS */}
-          <div className="tab-bar">
+          <div className="tab-bar" role="tablist">
             <button
               className={`tab ${activeTab === 'learn' ? 'active' : ''}`}
               onClick={() => setActiveTab('learn')}
+              role="tab"
+              aria-selected={activeTab === 'learn'}
+              aria-label="Learn prompts tab"
             >
               📖 Learn
             </button>
             <button
               className={`tab ${activeTab === 'demo' ? 'active' : ''}`}
               onClick={() => setActiveTab('demo')}
+              role="tab"
+              aria-selected={activeTab === 'demo'}
+              aria-label="Demo template preview tab"
             >
               🧪 Demo
             </button>
             <button
               className={`tab ${activeTab === 'library' ? 'active' : ''}`}
               onClick={() => setActiveTab('library')}
+              role="tab"
+              aria-selected={activeTab === 'library'}
+              aria-label="Full library tab"
             >
               📚 Full Library
             </button>
@@ -443,15 +513,64 @@ export default function PromptLabApp() {
               <h2>{layerInfo.category}</h2>
               <p className="layer-description">{layerInfo.description}</p>
 
-              <div className="prompts-grid">
-                {Object.entries(layerInfo.prompts).map(([key, prompt]) => (
-                  <div
-                    key={key}
-                    className={`prompt-card ${selectedPrompt?.name === prompt.name ? 'selected' : ''}`}
-                    onClick={() => setSelectedPrompt(prompt)}
+              {/* Search and Filter */}
+              <div className="search-filter-bar">
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="🔍 Search prompts by name or description..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Search prompts"
+                />
+                <select
+                  className="filter-select"
+                  value={filterComplexity}
+                  onChange={(e) => setFilterComplexity(e.target.value)}
+                  aria-label="Filter by complexity"
+                >
+                  <option value="all">All Complexity Levels</option>
+                  <option value="Beginner">Beginner</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced">Advanced</option>
+                </select>
+                {(searchQuery || filterComplexity !== 'all') && (
+                  <button
+                    className="clear-filters"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setFilterComplexity('all');
+                    }}
+                    aria-label="Clear filters"
                   >
-                    <h4>{prompt.name}</h4>
-                    <p className="prompt-desc">{prompt.description}</p>
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+
+              <div className="prompts-grid">
+                {Object.entries(getFilteredPrompts()).length === 0 ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <p>No prompts found matching your search criteria.</p>
+                    <p>Try adjusting your filters or search query.</p>
+                  </div>
+                ) : (
+                  Object.entries(getFilteredPrompts()).map(([key, prompt]) => (
+                    <div
+                      key={key}
+                      className={`prompt-card ${selectedPrompt?.name === prompt.name ? 'selected' : ''}`}
+                      onClick={() => setSelectedPrompt(prompt)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Select ${prompt.name} prompt`}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          setSelectedPrompt(prompt);
+                        }
+                      }}
+                    >
+                      <h4>{prompt.name}</h4>
+                      <p className="prompt-desc">{prompt.description}</p>
                     <div className="prompt-meta">
                       {prompt.accuracy_boost && (
                         <span className="boost">🚀 {prompt.accuracy_boost} accuracy</span>
@@ -481,12 +600,14 @@ export default function PromptLabApp() {
                           e.stopPropagation();
                           toggleFavorite(prompt.name);
                         }}
+                        aria-label={favoritePrompts.includes(prompt.name) ? 'Remove from favorites' : 'Add to favorites'}
                       >
                         {favoritePrompts.includes(prompt.name) ? '⭐' : '☆'}
                       </button>
                     </div>
                   </div>
-                ))}
+                  ))
+                )}
               </div>
 
               {selectedPrompt && (
@@ -497,6 +618,13 @@ export default function PromptLabApp() {
                   <div className="template-view">
                     <h4>Prompt Template:</h4>
                     <pre>{selectedPrompt.template}</pre>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => copyToClipboard(selectedPrompt.template)}
+                      aria-label="Copy template to clipboard"
+                    >
+                      📋 Copy Template
+                    </button>
                   </div>
                 </div>
               )}
@@ -506,7 +634,11 @@ export default function PromptLabApp() {
           {/* DEMO TAB */}
           {activeTab === 'demo' && (
             <div className="tab-content">
-              <h2>🧪 Try a Prompt</h2>
+              <h2>🧪 Template Preview</h2>
+              <p className="layer-description">
+                See how prompts are structured. Enter your question to see the formatted template
+                that you can copy and use with any AI model (ChatGPT, Claude, local LLMs, etc.)
+              </p>
 
               <div className="demo-section">
                 <div className="demo-input">
@@ -518,14 +650,36 @@ export default function PromptLabApp() {
                       <button
                         className="btn-secondary"
                         onClick={() => setSelectedPrompt(null)}
+                        aria-label="Change prompt"
                       >
                         Change Prompt
                       </button>
                     </div>
                   ) : (
-                    <p style={{ color: 'rgba(224,224,255,0.5)' }}>
-                      ← Select a prompt from the Learn tab first
-                    </p>
+                    <div>
+                      <select
+                        className="demo-input"
+                        onChange={(e) => {
+                          const [layerKey, promptKey] = e.target.value.split('::');
+                          if (layerKey && promptKey) {
+                            const prompt = PROMPT_LIBRARY[layerKey].prompts[promptKey];
+                            setSelectedPrompt(prompt);
+                          }
+                        }}
+                        aria-label="Select a prompt"
+                      >
+                        <option value="">Choose a prompt...</option>
+                        {Object.entries(PROMPT_LIBRARY).map(([layerKey, layer]) => (
+                          <optgroup key={layerKey} label={layer.category}>
+                            {Object.entries(layer.prompts).map(([promptKey, prompt]) => (
+                              <option key={`${layerKey}::${promptKey}`} value={`${layerKey}::${promptKey}`}>
+                                {prompt.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
                   )}
                 </div>
 
@@ -543,13 +697,14 @@ export default function PromptLabApp() {
                   className="btn-primary"
                   onClick={runPrompt}
                   disabled={!selectedPrompt || !input.trim() || loading}
+                  aria-label="Generate template preview"
                 >
-                  {loading ? '⏳ Analyzing...' : '🚀 Run Prompt'}
+                  {loading ? '⏳ Generating...' : '🚀 Generate Template'}
                 </button>
 
                 {output && (
                   <div className="demo-output">
-                    <h3>✅ Result</h3>
+                    <h3>✅ Your Formatted Template</h3>
                     <div className="output-card">
                       <div className="output-header">
                         <strong>{output.prompt}</strong>
@@ -562,21 +717,25 @@ export default function PromptLabApp() {
                       </div>
 
                       <div className="output-section">
-                        <h4>Prompt Applied:</h4>
+                        <h4>Formatted Prompt (Copy This!):</h4>
                         <pre>{output.template}</pre>
                       </div>
 
                       <div className="output-section">
-                        <h4>How It Works:</h4>
-                        <p>
-                          This prompt was sent to a local AI model (Mistral 7B),
-                          which analyzed your question through this specific lens.
-                          The model then provided structured analysis following the
-                          template.
-                        </p>
+                        <h4>How to Use:</h4>
+                        <ol style={{ color: 'var(--text-secondary)', lineHeight: '1.8' }}>
+                          <li>Click "Copy Prompt" below to copy the formatted template</li>
+                          <li>Paste it into any AI chat interface (ChatGPT, Claude, Gemini, etc.)</li>
+                          <li>The AI will analyze your question using this structured framework</li>
+                          <li>Get more accurate, comprehensive, and insightful responses!</li>
+                        </ol>
                       </div>
 
-                      <button className="btn-secondary">
+                      <button
+                        className="btn-secondary"
+                        onClick={() => copyToClipboard(output.template)}
+                        aria-label="Copy formatted prompt to clipboard"
+                      >
                         📋 Copy Prompt
                       </button>
                     </div>
@@ -629,6 +788,13 @@ export default function PromptLabApp() {
           )}
         </main>
       </div>
+
+      {/* Notification */}
+      {notification && (
+        <div className={`notification ${notification.type}`} role="alert" aria-live="polite">
+          {notification.message}
+        </div>
+      )}
     </div>
   );
 }
